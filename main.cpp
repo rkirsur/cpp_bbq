@@ -2,7 +2,7 @@
 #include <cassert>
 #include <pthread.h>
 #include <iostream>
-#include <bbq.h>
+#include "bbq.h"
 #include <stdint.h>
 #include <chrono>
 #include <stdlib.h>
