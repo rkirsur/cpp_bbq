@@ -7,9 +7,9 @@
 #include <chrono>
 #include <stdlib.h>
 
-static constexpr uint64_t ITERS = 100000000;
-static constexpr uint64_t CAPACITY = 10000;
-static constexpr uint64_t NUM_OF_BLOCKS = 8;
+static constexpr uint64_t ITERS = 16;
+static constexpr uint64_t CAPACITY = 16;
+static constexpr uint64_t NUM_OF_BLOCKS = 4;
 
 PEX::BBQ::SPSC::Queue<uint64_t, CAPACITY, NUM_OF_BLOCKS> q;
 
@@ -38,10 +38,10 @@ int main(void)
     auto begin = std::chrono::steady_clock::now();
 
     pthread_t t_writer;
-    pthread_t t_reader;
+    // pthread_t t_reader;
     pthread_create(&t_writer, NULL, writer, NULL);
-    pthread_create(&t_reader, NULL, reader, NULL);
-    pthread_join(t_reader, NULL);
+    // pthread_create(&t_reader, NULL, reader, NULL);
+    // pthread_join(t_reader, NULL);
     pthread_join(t_writer, NULL);
 
     auto end = std::chrono::steady_clock::now();

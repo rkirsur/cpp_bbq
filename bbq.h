@@ -68,8 +68,8 @@ class Queue {
     struct Block {
         Block(){}
         void init(bool is_first, Block* next) {
-            prod.init(is_first, next);
-            // cons.init(is_first, next);
+            // phead.init(is_first, next);
+            // chead.init(is_first, next);
 
             alloc.init(is_first, next);
             comm.init(is_first, next);
@@ -77,20 +77,20 @@ class Queue {
             cons.init(is_first, next);
         }
         
-        alignas(CACHELINE_SIZE) Cursor prod;
-        // alignas(CACHELINE_SIZE) Cursor cons;
+        // alignas(CACHELINE_SIZE) Cursor phead;
+        // alignas(CACHELINE_SIZE) Cursor chead;
 
         alignas(CACHELINE_SIZE) Cursor alloc;
         alignas(CACHELINE_SIZE) Cursor comm;
         alignas(CACHELINE_SIZE) Cursor resv;
         alignas(CACHELINE_SIZE) Cursor cons;
         alignas(CACHELINE_SIZE) T data[NE];
-        __attribute__((always_inline)) bool prod_ready(uint64_t vsn) {
-            Field p = bbq_load_rlx(prod.field);
-            return (p.version == vsn);
-        }
-        // __attribute__((always_inline)) bool cons_ready(uint64_t vsn) {
-        //     Field c = bbq_load_acq(cons.field);
+        // __attribute__((always_inline)) bool phead_ready(uint64_t vsn) {
+        //     Field p = bbq_load_rlx(phead.field);
+        //     return (p.version == vsn);
+        // }
+        // __attribute__((always_inline)) bool chead_ready(uint64_t vsn) {
+        //     Field c = bbq_load_acq(chead.field);
         //     return (c.version == vsn && c.index == NE) || (c.version > vsn);
         // }
 
@@ -118,6 +118,8 @@ public:
         for (uint64_t i = 0; i < B; i++) {
             blocks[i].init(i == 0, &blocks[(i + 1) % B]);
         }
+        phead.init(true, head->alloc.next);
+        chead.init(true, head->alloc.next);
     }
     __attribute__((always_inline)) bool enqueue(T t) {
     again:;
@@ -163,22 +165,22 @@ public:
 private:
     __attribute__((noinline)) bool prod_advance() {
         std::cout << "enq: entered prod_advance" << std::endl;
-        Block* nb = head->prod.next;
-        Field p = bbq_load_rlx(head->prod.field);
-        uint64_t nvsn = p.version + nb->prod.is_first;
+        Block* nb = head->alloc.next;
+        Field p = bbq_load_rlx(head->alloc.field);
+        uint64_t nvsn = p.version + nb->alloc.is_first;
         if (!nb->cons_ready(nvsn - 1)) return false;
         Field np(nvsn, 0);
-        bbq_store_rlx(nb->prod.field, np);
+        bbq_store_rlx(nb->alloc.field, np);
         head = nb;
         return true;
     }
     __attribute__((noinline)) Block* cons_advance() {
-        Block* nb = tail->cons.next;
-        Field c = bbq_load_rlx(tail->cons.field);
-        uint64_t nvsn = c.version + nb->cons.is_first;
+        Block* nb = tail->chead.next;
+        Field c = bbq_load_rlx(tail->chead.field);
+        uint64_t nvsn = c.version + nb->chead.is_first;
         if (!nb->prod_ready(nvsn)) return nullptr;
         Field np(nvsn, 0);
-        bbq_store_rlx(nb->cons.field, np);
+        bbq_store_rlx(nb->chead.field, np);
         tail = nb;
         return nb;
     }
@@ -187,6 +189,9 @@ private:
     alignas(CACHELINE_SIZE) Block* head;
     alignas(CACHELINE_SIZE) Block* tail;
     alignas(CACHELINE_SIZE) Block blocks[B];
+
+    alignas(CACHELINE_SIZE) Cursor phead;
+    alignas(CACHELINE_SIZE) Cursor chead;
 };
 
 }
