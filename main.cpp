@@ -7,7 +7,7 @@
 #include <chrono>
 #include <stdlib.h>
 
-static constexpr uint64_t ITERS = 16;
+static constexpr uint64_t ITERS = 5;
 static constexpr uint64_t CAPACITY = 16;
 static constexpr uint64_t NUM_OF_BLOCKS = 4;
 
