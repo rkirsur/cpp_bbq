@@ -7,7 +7,7 @@
 #include <chrono>
 #include <stdlib.h>
 
-static constexpr uint64_t ITERS = 5;
+static constexpr uint64_t ITERS = 8;
 static constexpr uint64_t CAPACITY = 16;
 static constexpr uint64_t NUM_OF_BLOCKS = 4;
 
@@ -17,6 +17,7 @@ void *writer(void *arg)
 {
     for (uint64_t i = 0; i < ITERS; i++) {
         while(!q.enqueue(i)); // enqueue data i
+        // q.enqueue(i);
     }
     (void)arg;
     return NULL;

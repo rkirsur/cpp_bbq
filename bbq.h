@@ -54,7 +54,7 @@ class Queue {
     struct Cursor {
         Cursor() : field(Field()) {}
         void init(bool first, Block* block) {
-            Field f = first ? Field(1, 0) : Field(0, NE);
+            Field f = first ? Field(0, 0) : Field(0, NE);
             bbq_store_rlx(field, f);
             next = block;
             is_first = first;
@@ -84,7 +84,7 @@ class Queue {
 
 public:
     Queue() {
-        head = tail = &blocks[0];
+        // head = tail = &blocks[0];
         for (uint64_t i = 0; i < B; i++) {
             blocks[i].init(i == 0, &blocks[(i + 1) % B]);
         }
@@ -93,8 +93,11 @@ public:
     }
     __attribute__((always_inline)) bool enqueue(T t) {
     again:;
+        Field ph = bbq_load_rlx(phead);
+        Block* head = &blocks[ph.index];
         Field a = bbq_load_rlx(head->alloc.field);
         std::cout << "enq: loaded alloc " << a.index << std::endl;
+        std::cout << "version: " << a.version << std::endl;
         bbq_store_rel(head->alloc.field, a + 1);
         std::cout << "enq: alloc + 1" << std::endl;
         if bbq_likely (a.index <= NE) {
@@ -129,38 +132,48 @@ private:
         Field ph = bbq_load_rlx(phead);
         Block* nb = &blocks[(ph.index + 1) % B];
         Field c = bbq_load_rlx(nb->cons.field);
+        // std::cout << "c.version: " << c.version << std::endl;
+        // std::cout << "c.index: " << c.index << std::endl;
+        // std::cout << "ph.version: " << ph.version << std::endl;
+        // std::cout << "ph.index: " << ph.index << std::endl;
         if (c.version < ph.version || c.version == ph.version && c.index != NE) {
             // Field r = bbq_load_rlx(nb->resv.field);
             // if r.index == c.index return no_entry, else not_available
+            // std::cout << "false" << std::endl;
             return false;
         }
         Field f = Field((ph.version + 1), 0);
+        Field f2 = Field((ph.version + 1), 1);
         if (f.version > c.version) {
             bbq_store_rlx(nb->cons.field, f);
         }
         Field a = bbq_load_rlx(nb->alloc.field);
+        // std::cout << "a.version: " << a.version << std::endl;
+        // std::cout << "a.index: " << a.index << std::endl;
         if (f.version > a.version) {
             bbq_store_rlx(nb->alloc.field, f);
         }
-        if (f.version > ph.version) {
-            bbq_store_rlx(phead, f);
+        if (f2.version > ph.version) {
+            bbq_store_rlx(phead, f2);
         }
+        std::cout << "exit prod advance" << std::endl;
         return true;
     }
     __attribute__((noinline)) Block* cons_advance() {
-        Block* nb = tail->chead.next;
-        Field c = bbq_load_rlx(tail->chead.field);
-        uint64_t nvsn = c.version + nb->chead.is_first;
-        if (!nb->prod_ready(nvsn)) return nullptr;
-        Field np(nvsn, 0);
-        bbq_store_rlx(nb->chead.field, np);
-        tail = nb;
-        return nb;
+        // Block* nb = tail->chead.next;
+        // Field c = bbq_load_rlx(tail->chead.field);
+        // uint64_t nvsn = c.version + nb->chead.is_first;
+        // if (!nb->prod_ready(nvsn)) return nullptr;
+        // Field np(nvsn, 0);
+        // bbq_store_rlx(nb->chead.field, np);
+        // tail = nb;
+        // return nb;
+        return false;
     }
 
 private:
-    alignas(CACHELINE_SIZE) Block* head;
-    alignas(CACHELINE_SIZE) Block* tail;
+    // alignas(CACHELINE_SIZE) Block* head;
+    // alignas(CACHELINE_SIZE) Block* tail;
     alignas(CACHELINE_SIZE) Block blocks[B];
 
     alignas(CACHELINE_SIZE) std::atomic<Field> phead;
