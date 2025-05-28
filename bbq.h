@@ -139,11 +139,11 @@ private:
         if (c.version < ph.version || c.version == ph.version && c.index != NE) {
             // Field r = bbq_load_rlx(nb->resv.field);
             // if r.index == c.index return no_entry, else not_available
-            // std::cout << "false" << std::endl;
+            std::cout << "false" << std::endl;
             return false;
         }
         Field f = Field((ph.version + 1), 0);
-        Field f2 = Field((ph.version + 1), 1);
+        Field f2 = Field(ph.version, (ph.index + 1));
         if (f.version > c.version) {
             bbq_store_rlx(nb->cons.field, f);
         }
@@ -153,9 +153,10 @@ private:
         if (f.version > a.version) {
             bbq_store_rlx(nb->alloc.field, f);
         }
-        if (f2.version > ph.version) {
-            bbq_store_rlx(phead, f2);
-        }
+        // if (f2.version > ph.version) {
+        //     bbq_store_rlx(phead, f2);
+        // }
+        bbq_store_rlx(phead, f2);
         std::cout << "exit prod advance" << std::endl;
         return true;
     }
