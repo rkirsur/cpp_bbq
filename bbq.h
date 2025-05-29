@@ -143,9 +143,6 @@ private:
             return false;
         }
         Field f = Field((ph.version + 1), 0);
-        if (f.version > c.version) {
-            bbq_store_rlx(nb->cons.field, f);
-        }
         Field a = bbq_load_rlx(nb->alloc.field);
         // std::cout << "a.version: " << a.version << std::endl;
         // std::cout << "a.index: " << a.index << std::endl;
