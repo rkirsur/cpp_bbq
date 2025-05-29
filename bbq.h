@@ -143,7 +143,6 @@ private:
             return false;
         }
         Field f = Field((ph.version + 1), 0);
-        Field f2 = Field(ph.version, (ph.index + 1));
         if (f.version > c.version) {
             bbq_store_rlx(nb->cons.field, f);
         }
@@ -153,10 +152,16 @@ private:
         if (f.version > a.version) {
             bbq_store_rlx(nb->alloc.field, f);
         }
-        // if (f2.version > ph.version) {
-        //     bbq_store_rlx(phead, f2);
-        // }
-        bbq_store_rlx(phead, f2);
+        Field co = bbq_load_rlx(nb->comm.field);
+        if (f.version > co.version) {
+            bbq_store_rlx(nb->comm.field, f);
+        }
+        ph.index += 1;
+        if (ph.index >= NE) {
+            ph.index = ph.index % NE;
+            ph.version += 1;
+        }
+        bbq_store_rlx(phead, ph);
         std::cout << "exit prod advance" << std::endl;
         return true;
     }
