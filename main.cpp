@@ -23,6 +23,26 @@ void *writer(void *arg)
     return NULL;
 }
 
+void *writer1(void *arg)
+{
+    for (uint64_t i = 0; i < ITERS/2; i++) {
+        while(!q.enqueue(1)); // enqueue data i
+        // q.enqueue(i);
+    }
+    (void)arg;
+    return NULL;
+}
+
+void *writer2(void *arg)
+{
+    for (uint64_t i = 0; i < ITERS/2; i++) {
+        while(!q.enqueue(2)); // enqueue data i
+        // q.enqueue(i);
+    }
+    (void)arg;
+    return NULL;
+}
+
 void *reader(void *arg)
 {
     uint64_t buf;
@@ -38,12 +58,21 @@ int main(void)
 {
     auto begin = std::chrono::steady_clock::now();
 
-    pthread_t t_writer;
-    // pthread_t t_reader;
-    pthread_create(&t_writer, NULL, writer, NULL);
-    // pthread_create(&t_reader, NULL, reader, NULL);
-    // pthread_join(t_reader, NULL);
-    pthread_join(t_writer, NULL);
+    // pthread_t t_writer;
+    // // pthread_t t_reader;
+    // pthread_create(&t_writer, NULL, writer, NULL);
+    // // pthread_create(&t_reader, NULL, reader, NULL);
+    // // pthread_join(t_reader, NULL);
+    // pthread_join(t_writer, NULL);
+
+    pthread_t t_writer1;
+    pthread_t t_writer2;
+    pthread_create(&t_writer1, NULL, writer1, NULL);
+    pthread_create(&t_writer1, NULL, writer2, NULL);
+    pthread_join(t_writer1, NULL);
+    pthread_join(t_writer2, NULL);
+
+    q.printData();
 
     auto end = std::chrono::steady_clock::now();
 

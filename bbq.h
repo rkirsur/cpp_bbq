@@ -95,14 +95,14 @@ public:
     again:;
         Field ph = bbq_load_rlx(phead);
         Block* head = &blocks[ph.index];
-        Field a = bbq_load_rlx(head->alloc.field);
-        std::cout << "enq: loaded alloc " << a.index << std::endl;
-        std::cout << "version: " << a.version << std::endl;
+        Field a = bbq_load_acq(head->alloc.field);
+        std::cout << "enq: loaded alloc.index" << a.index << std::endl;
+        std::cout << "alloc.version: " << a.version << std::endl;
         bbq_store_rel(head->alloc.field, a + 1);
         std::cout << "enq: alloc + 1" << std::endl;
         if bbq_likely (a.index <= NE) {
-            Field c = bbq_load_rlx(head->comm.field);
-            std::cout << "enq: loaded commit " << c.index << std::endl;
+            Field c = bbq_load_acq(head->comm.field);
+            std::cout << "enq: loaded commit.index" << c.index << std::endl;
             head->data[c.index] = t;
             std::cout << "enq: data entered" << std::endl;
             bbq_store_rel(head->comm.field, c + 1);
@@ -124,6 +124,14 @@ public:
         // }
         // if bbq_likely(cons_advance()) goto again;
         return false;
+    }
+
+    __attribute__((always_inline)) void printData() {
+        for (uint64_t i = 0; i < B; i++) {
+            for (uint64_t j = 0; j < NE; j++) {
+                std::cout << blocks[i].data[j] << std::endl;
+            }
+        }
     }
 
 private:
