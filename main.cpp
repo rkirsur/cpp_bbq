@@ -15,31 +15,11 @@ PEX::BBQ::SPSC::Queue<uint64_t, CAPACITY, NUM_OF_BLOCKS> q;
 
 void *writer(void *arg)
 {
-    for (uint64_t i = 0; i < ITERS; i++) {
-        while(!q.enqueue(i)); // enqueue data i
-        // q.enqueue(i);
+    for (uint64_t i = 0; i < 2; i++) {
+        while(!q.enqueue(*(uint64_t *)arg)); // enqueue data i
+        // q.enqueue(*(uint64_t *)arg);
     }
-    (void)arg;
-    return NULL;
-}
-
-void *writer1(void *arg)
-{
-    for (uint64_t i = 0; i < ITERS/2; i++) {
-        while(!q.enqueue(1)); // enqueue data i
-        // q.enqueue(i);
-    }
-    (void)arg;
-    return NULL;
-}
-
-void *writer2(void *arg)
-{
-    for (uint64_t i = 0; i < ITERS/2; i++) {
-        while(!q.enqueue(2)); // enqueue data i
-        // q.enqueue(i);
-    }
-    (void)arg;
+    // (void)arg;
     return NULL;
 }
 
@@ -58,17 +38,15 @@ int main(void)
 {
     auto begin = std::chrono::steady_clock::now();
 
-    // pthread_t t_writer;
-    // // pthread_t t_reader;
-    // pthread_create(&t_writer, NULL, writer, NULL);
-    // // pthread_create(&t_reader, NULL, reader, NULL);
-    // // pthread_join(t_reader, NULL);
-    // pthread_join(t_writer, NULL);
-
+    uint64_t arg1 = 1;
+    uint64_t arg2 = 2;
     pthread_t t_writer1;
     pthread_t t_writer2;
-    pthread_create(&t_writer1, NULL, writer1, NULL);
-    pthread_create(&t_writer1, NULL, writer2, NULL);
+    // pthread_t t_reader;
+    pthread_create(&t_writer1, NULL, writer, &arg1);
+    pthread_create(&t_writer2, NULL, writer, &arg2);
+    // pthread_create(&t_reader, NULL, reader, NULL);
+    // pthread_join(t_reader, NULL);
     pthread_join(t_writer1, NULL);
     pthread_join(t_writer2, NULL);
 
