@@ -58,10 +58,6 @@ class Queue {
             bbq_store_rlx(comm, f);
             bbq_store_rlx(resv, f);
             bbq_store_rlx(cons, f);
-            // alloc.init(is_first);
-            // comm.init(is_first);
-            // resv.init(is_first);
-            // cons.init(is_first);
         }
 
         alignas(CACHELINE_SIZE) std::atomic<Field> alloc;
@@ -72,31 +68,42 @@ class Queue {
 
     } __attribute__((aligned(CACHELINE_SIZE)));
 
+    enum RetStatus {NO_ENTRY, NOT_AVAILABLE, SUCCESS, BLOCK_DONE};
+
 public:
     Queue() {
-        // head = tail = &blocks[0];
         for (uint64_t i = 0; i < B; i++) {
-            // blocks[i].init(i == 0, &blocks[(i + 1) % B]);
             blocks[i].init(NE);
         }
         blocks[0].init(0);
         Field f = Field(0, 0);
         bbq_store_rlx(phead, f);
         bbq_store_rlx(chead, f);
-        // phead = Field(0,0);
-        // chead = Field(0,0);
     }
     bool enqueue(T t) {
         while(true) {
             // get phead and block
             Field ph = bbq_load_rlx(phead);
             Block* b = &blocks[ph.index];
-            int index = allocate_entry(b);
-            if (index >= 0) {
-                commit_entry(b, index, t);
+            // int index = allocate_entry(b);
+            // if (index >= 0) {
+            //     commit_entry(b, index, t);
+            //     return true;
+            // } else {
+            //     if (advance_phead(ph)) {
+            //         continue;
+            //     } else {
+            //         return false;
+            //     }
+            // }
+
+            std::pair<RetStatus, int> retval = allocate_entry(b);
+            if (retval.first == SUCCESS) {
+                commit_entry(b, retval.second, t);
                 return true;
             } else {
-                if (advance_phead(ph)) {
+                RetStatus ret = advance_phead(ph);
+                if (ret == SUCCESS) {
                     continue;
                 } else {
                     return false;
@@ -133,20 +140,20 @@ public:
     }
 
 private:
-    int allocate_entry(Block* b) {
+    std::pair<RetStatus, int> allocate_entry(Block* b) {
         Field a = bbq_load_rlx(b->alloc)
         // std::cout << a.index << std::endl;
         if (a.index >= NE) {
-            return -1;
+            return std::make_pair(BLOCK_DONE, -1);
         }
         Field old_alloc = bbq_load_acq(b->alloc);
         int old = old_alloc.index;
         // std::cout << "old " << old << std::endl;
         bbq_store_rel(b->alloc, old_alloc + 1);
         if (old >= NE) {
-            return -1;
+            return std::make_pair(BLOCK_DONE, -1);
         }
-        return old;
+        return std::make_pair(SUCCESS, old);
     }
 
     void commit_entry(Block* b, int index, T t) {
@@ -155,26 +162,28 @@ private:
         bbq_store_rel(b->comm, c + 1);
     }
 
-    bool advance_phead(Field ph) {
-        std::cout << "enq: entered prod_advance" << std::endl;
-        std::cout << "phead index: " << ph.index << std::endl;
-        std::cout << "phead version: " << ph.version << std::endl;
+    RetStatus advance_phead(Field ph) {
+        // std::cout << "enq: entered prod_advance" << std::endl;
+        // std::cout << "phead index: " << ph.index << std::endl;
+        // std::cout << "phead version: " << ph.version << std::endl;
         Block* nb = &blocks[(ph.index + 1) % B];
         Field c = bbq_load_rlx(nb->cons);
-        std::cout << "c.version: " << c.version << std::endl;
-        std::cout << "c.index: " << c.index << std::endl;
-        std::cout << "ph.version: " << ph.version << std::endl;
-        std::cout << "ph.index: " << ph.index << std::endl;
+        // std::cout << "c.version: " << c.version << std::endl;
+        // std::cout << "c.index: " << c.index << std::endl;
+        // std::cout << "ph.version: " << ph.version << std::endl;
+        // std::cout << "ph.index: " << ph.index << std::endl;
         if (c.version < ph.version || (c.version == ph.version && c.index != NE)) {
-            // Field r = bbq_load_rlx(nb->resv.field);
-            // if r.index == c.index return no_entry, else not_available
-            std::cout << "false" << std::endl;
-            return false;
+            Field r = bbq_load_rlx(nb->resv);
+            if (r.index == c.index) {
+                return NO_ENTRY;
+            } else {
+                return NOT_AVAILABLE;
+            }
         }
         Field f = Field((ph.version + 1), 0);
         Field a = bbq_load_rlx(nb->alloc);
-        std::cout << "a.version: " << a.version << std::endl;
-        std::cout << "a.index: " << a.index << std::endl;
+        // std::cout << "a.version: " << a.version << std::endl;
+        // std::cout << "a.index: " << a.index << std::endl;
         if (f.version > a.version) {
             bbq_store_rlx(nb->alloc, f);
         }
@@ -188,8 +197,8 @@ private:
             ph.version += 1;
         }
         bbq_store_rlx(phead, ph);
-        std::cout << "exit prod advance" << std::endl;
-        return true;
+        // std::cout << "exit prod advance" << std::endl;
+        return SUCCESS;
     }
     Block* cons_advance() {
         // Block* nb = tail->chead.next;
