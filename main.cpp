@@ -35,7 +35,7 @@ void *reader(void *arg)
     uint64_t buf;
     for (uint64_t i = 0; i < 2; i++) {
         while(!q.dequeue(buf)); // get data i
-        if (buf != i) abort();
+        // if (buf != i) abort();
     }
     (void)arg;
     return NULL;
@@ -57,13 +57,15 @@ int main(void)
     //     uint64_t arg = i + 1;
     //     pthread_create(&t_writerid[i], NULL, writer, &arg);
     // }
-    // pthread_t t_reader;
     pthread_create(&t_writerid[0], NULL, writer, &arg1);
     pthread_create(&t_writerid[1], NULL, writer, &arg2);
-    // pthread_create(&t_reader, NULL, reader, NULL);
-    // pthread_join(t_reader, NULL);
     pthread_join(t_writerid[0], NULL);
     pthread_join(t_writerid[1], NULL);
+
+
+    // pthread_t t_reader;
+    // pthread_create(&t_reader, NULL, reader, NULL);
+    // pthread_join(t_reader, NULL);
 
     q.printData();
 

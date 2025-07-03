@@ -1,6 +1,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdlib>
+#include <algorithm>
 
 #pragma once
 
@@ -85,17 +86,6 @@ public:
             // get phead and block
             Field ph = bbq_load_rlx(phead);
             Block* b = &blocks[ph.index];
-            // int index = allocate_entry(b);
-            // if (index >= 0) {
-            //     commit_entry(b, index, t);
-            //     return true;
-            // } else {
-            //     if (advance_phead(ph)) {
-            //         continue;
-            //     } else {
-            //         return false;
-            //     }
-            // }
 
             std::pair<RetStatus, int> retval = allocate_entry(b);
             if (retval.first == SUCCESS) {
@@ -112,17 +102,32 @@ public:
         }
     }
     bool dequeue(T& t) {
-    // again:;
-        // Field c = bbq_load_rlx(tail->cons.field);
-        // if bbq_likely (c.index < NE) {
-        //     Field p = bbq_load_acq(tail->prod.field);
-        //     if bbq_unlikely (p.index == c.index) return false;
-        //     t = tail->data[c.index];
-        //     bbq_store_rel(tail->cons.field, c + 1);
-        //     return true;
-        // }
-        // if bbq_likely(cons_advance()) goto again;
-        return false;
+        while(true) {
+            // get chead and block
+            Field ch = bbq_load_rlx(chead);
+            Block* b = &blocks[ch.index];
+
+            std::pair<RetStatus, Field> retval = reserve_entry(b);
+            if (retval.first == SUCCESS) {
+                t = consume_entry(b, retval.second);
+                return true;
+                // if (t == NULL) {
+                //     continue;
+                // } else {
+                //     return true;
+                // }
+            } else if (retval.first == NO_ENTRY) {
+                return false;
+            } else if (retval.first == NOT_AVAILABLE) {
+                return false;
+            } else {
+                if (advance_chead(ch, retval.second.version)) {
+                    continue;
+                } else {
+                    return false;
+                }
+            }
+        }
     }
 
     void printData() {
@@ -146,10 +151,11 @@ private:
         if (a.index >= NE) {
             return std::make_pair(BLOCK_DONE, -1);
         }
+        // should be fetch and add
         Field old_alloc = bbq_load_acq(b->alloc);
         int old = old_alloc.index;
-        // std::cout << "old " << old << std::endl;
         bbq_store_rel(b->alloc, old_alloc + 1);
+        // faa end
         if (old >= NE) {
             return std::make_pair(BLOCK_DONE, -1);
         }
@@ -158,8 +164,10 @@ private:
 
     void commit_entry(Block* b, int index, T t) {
         b->data[index] = t;
+        // should be atomic add
         Field c = bbq_load_acq(b->comm);
         bbq_store_rel(b->comm, c + 1);
+        // add end
     }
 
     RetStatus advance_phead(Field ph) {
@@ -181,42 +189,103 @@ private:
             }
         }
         Field f = Field((ph.version + 1), 0);
+        // should be atomic max
         Field a = bbq_load_rlx(nb->alloc);
-        // std::cout << "a.version: " << a.version << std::endl;
-        // std::cout << "a.index: " << a.index << std::endl;
         if (f.version > a.version) {
             bbq_store_rlx(nb->alloc, f);
         }
+        // atomic max end
+
+        // should be atomic max
         Field co = bbq_load_rlx(nb->comm);
         if (f.version > co.version) {
             bbq_store_rlx(nb->comm, f);
         }
+        // atomic max end
+
+        // should be atomic max
         ph + 1;
         if (ph.index >= NE) {
             ph.index = ph.index % NE;
             ph.version += 1;
         }
         bbq_store_rlx(phead, ph);
+        // atomic max end
+
         // std::cout << "exit prod advance" << std::endl;
         return SUCCESS;
     }
-    Block* cons_advance() {
-        // Block* nb = tail->chead.next;
-        // Field c = bbq_load_rlx(tail->chead.field);
-        // uint64_t nvsn = c.version + nb->chead.is_first;
-        // if (!nb->prod_ready(nvsn)) return nullptr;
-        // Field np(nvsn, 0);
-        // bbq_store_rlx(nb->chead.field, np);
-        // tail = nb;
-        // return nb;
-        return false;
+
+    std::pair<RetStatus, Field> reserve_entry(Block* b) {
+        while (true) {
+            Field r = bbq_load_rlx(b->resv);
+            if (r.index < NE) {
+                Field c = bbq_load_rlx(b->comm);
+                if (r.index == c.index) {
+                    return std::make_pair(NO_ENTRY, r); 
+                }
+                if (c.index != NE) {
+                    Field a = bbq_load_rlx(b->alloc);
+                    if (a.index != c.index) {
+                        return std::make_pair(NOT_AVAILABLE, r);
+                    }
+                }
+
+                // should be atomic max
+                Field res = bbq_load_rlx(b->resv);
+                if (std::max((int)res.index, (int)(r.index + 1)) == r.index) {
+                // atomic max end
+                    return std::make_pair(SUCCESS, r);
+                } else {
+                    continue;
+                }
+            }
+            return std::make_pair(BLOCK_DONE, r);
+        }
+    }
+
+    T consume_entry(Block* b, Field f) {
+        T data = b->data[f.index];
+        // should be atomic add
+        Field c = bbq_load_acq(b->cons);
+        bbq_store_rel(b->cons, c + 1);
+        // atomic add end
+        return data;
+    }
+
+    bool advance_chead(Field ch, int version) {
+        Block* nb = &blocks[(ch.index + 1) % B];
+        Field c = bbq_load_rlx(nb->comm);
+        if (c.version != ch.version + 1) {
+            return false;
+        }
+        Field f = Field((ch.version + 1), 0);
+        // should be atomic max
+        Field cons = bbq_load_rlx(nb->cons);
+        if (f.version > cons.version) {
+            bbq_store_rlx(nb->cons, f);
+        }
+        // atomic max end
+        // should be atomic max
+        Field resv = bbq_load_rlx(nb->resv);
+        if (f.version > resv.version) {
+            bbq_store_rlx(nb->resv, f);
+        }
+        // atomic max end
+        // should be atomic max
+        ch + 1;
+        if (ch.index >= NE) {
+            ch.index = ch.index % NE;
+            ch.version += 1;
+        }
+        bbq_store_rlx(chead, ch);
+        // atomic max end
+
+        return true;
     }
 
 private:
-    // alignas(CACHELINE_SIZE) Block* head;
-    // alignas(CACHELINE_SIZE) Block* tail;
     alignas(CACHELINE_SIZE) Block blocks[B];
-
     alignas(CACHELINE_SIZE) std::atomic<Field> phead;
     alignas(CACHELINE_SIZE) std::atomic<Field> chead;
 };
