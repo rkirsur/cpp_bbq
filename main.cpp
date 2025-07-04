@@ -35,6 +35,7 @@ void *reader(void *arg)
     uint64_t buf;
     for (uint64_t i = 0; i < 2; i++) {
         while(!q.dequeue(buf)); // get data i
+        std::cout << "consumed: " << buf << std::endl;
         // if (buf != i) abort();
     }
     (void)arg;
@@ -61,12 +62,15 @@ int main(void)
     pthread_create(&t_writerid[1], NULL, writer, &arg2);
     pthread_join(t_writerid[0], NULL);
     pthread_join(t_writerid[1], NULL);
+    std::cout << "PRODUCERS DONE" << std::endl;
+    q.printData();
 
 
-    // pthread_t t_reader;
-    // pthread_create(&t_reader, NULL, reader, NULL);
-    // pthread_join(t_reader, NULL);
+    pthread_t t_reader;
+    pthread_create(&t_reader, NULL, reader, NULL);
+    pthread_join(t_reader, NULL);
 
+    std::cout << "CONSUMERS DONE" << std::endl;
     q.printData();
 
     auto end = std::chrono::steady_clock::now();

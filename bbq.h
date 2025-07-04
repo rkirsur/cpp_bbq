@@ -73,10 +73,10 @@ class Queue {
 
 public:
     Queue() {
-        for (uint64_t i = 0; i < B; i++) {
+        blocks[0].init(0);
+        for (uint64_t i = 1; i < B; i++) {
             blocks[i].init(NE);
         }
-        blocks[0].init(0);
         Field f = Field(0, 0);
         bbq_store_rlx(phead, f);
         bbq_store_rlx(chead, f);
@@ -108,6 +108,7 @@ public:
             Block* b = &blocks[ch.index];
 
             std::pair<RetStatus, Field> retval = reserve_entry(b);
+            // std::cout << "retstatus: " << retval.first << std::endl;
             if (retval.first == SUCCESS) {
                 t = consume_entry(b, retval.second);
                 return true;
@@ -217,6 +218,7 @@ private:
     }
 
     std::pair<RetStatus, Field> reserve_entry(Block* b) {
+        // std::cout << "reserve entry entered" << std::endl;
         while (true) {
             Field r = bbq_load_rlx(b->resv);
             if (r.index < NE) {
@@ -233,19 +235,27 @@ private:
 
                 // should be atomic max
                 Field res = bbq_load_rlx(b->resv);
-                if (std::max((int)res.index, (int)(r.index + 1)) == r.index) {
+                int max = std::max((int)res.index, (int)(r.index + 1));
+                Field newresv = Field(r.version, max);
+                Field oldres = bbq_load_rlx(b->resv);
+                bbq_store_rlx(b->resv, newresv);
+                if (oldres.index == r.index) {
                 // atomic max end
                     return std::make_pair(SUCCESS, r);
                 } else {
+                    std::cout << "IN HERE" << std::endl;
                     continue;
                 }
             }
+            std::cout << "block done" << std::endl;
             return std::make_pair(BLOCK_DONE, r);
         }
     }
 
     T consume_entry(Block* b, Field f) {
+        // std::cout << "consume entry entered" << std::endl;
         T data = b->data[f.index];
+        b->data[f.index] = 0; //FOR TESTING PURPOSES ONLY
         // should be atomic add
         Field c = bbq_load_acq(b->cons);
         bbq_store_rel(b->cons, c + 1);
