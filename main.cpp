@@ -33,7 +33,7 @@ void *writer(void *arg)
 void *reader(void *arg)
 {
     uint64_t buf;
-    for (uint64_t i = 0; i < 2; i++) {
+    for (uint64_t i = 0; i < 3; i++) {
         while(!q.dequeue(buf)); // get data i
         std::cout << "consumed: " << buf << std::endl;
         // if (buf != i) abort();
@@ -66,9 +66,12 @@ int main(void)
     q.printData();
 
 
-    pthread_t t_reader;
-    pthread_create(&t_reader, NULL, reader, NULL);
-    pthread_join(t_reader, NULL);
+    pthread_t t_readerid[numThreads];
+    pthread_create(&t_readerid[0], NULL, reader, &arg1);
+    pthread_create(&t_readerid[1], NULL, reader, &arg2);
+    pthread_join(t_readerid[0], NULL);
+    pthread_join(t_readerid[1], NULL);
+    // pthread_join(t_reader, NULL);
 
     std::cout << "CONSUMERS DONE" << std::endl;
     q.printData();

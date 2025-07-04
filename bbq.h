@@ -247,7 +247,7 @@ private:
                     continue;
                 }
             }
-            std::cout << "block done" << std::endl;
+            // std::cout << "block done" << std::endl;
             return std::make_pair(BLOCK_DONE, r);
         }
     }
